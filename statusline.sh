@@ -11,8 +11,12 @@
 #                      "command": "bash $HOME/.claude/statusline.sh",   # 請填絕對路徑
 #                      "padding": 0, "refreshInterval": 1 }
 #
+#  選用：開子代理時 main 下方顯示的 subagent 面板（獨立協定，另一支設定）
+#      "subagentStatusLine": { "type": "command",
+#                      "command": "bash $HOME/.claude/statusline.sh --subagent" }
+#
 #  ── 想調什麼看這裡 ──────────────────────────────────────────────
-#   §1 調色盤   每一段的背景色 / 前景色（改這裡就好）
+#   §1 調色盤   每一段的背景色 / 前景色（改這裡就好，含 subagent 面板的 C_SUB_*）
 #   §2 圖示     Nerd Font glyph 與進度條字元
 #   §3 開關     顯示選項（反轉百分比、進度條寬度、快取秒數…）
 #   §4 版面     三行分別由哪些段組成（想搬動順序改這裡）
@@ -54,6 +58,18 @@ C_BAR_EMPTY=""           # 未填滿的顏色；留空 = 由藥丸底色混入�
 C_BAR_FILL="#0A1A2F"     # 進度條顏色（固定）；留空 = 改用下面 C_LV_* 動態三色
 C_BAR_TRACK=""           # 進度條軌道底色；留空 = 直接畫在藥丸底色上
 
+# ── Subagent 面板（subagentStatusLine，開子代理時 main 下方那幾行）────
+#    背景／文字留空 = 跟對應主列同色，改主列顏色時這裡會自動一起變
+C_SUB_NAME_BG=""                                    # 任務名稱底色；留空 = 用 C_GIT_BG
+C_SUB_MODEL_BG="#FF7F50";   C_SUB_MODEL_FG="#0A1A2F"   # 模型（珊瑚橘 + 深色字，對比 ~7:1）
+C_SUB_CTX_BG="#FFD166";     C_SUB_CTX_FG="#0A1A2F"     # context 進度條（跟 C_WK_BG 同色，深色字對比 ~12:1）
+C_SUB_ELAPSED_BG="#06D6A0"; C_SUB_ELAPSED_FG="#0A1A2F" # 執行時間（青綠 + 深色字，對比 ~9:1）
+# 任務名稱的文字色依狀態切換（底色固定用上面的 C_SUB_NAME_BG）
+C_SUB_FG_RUN="#9FD8E8"   # 執行中
+C_SUB_FG_OK="$C_LV_OK"   # 已完成
+C_SUB_FG_ERR="$C_LV_CRIT" # 失敗
+C_SUB_FG_DIM="#8FA3BF"   # 排隊／未知狀態
+
 # =============================================================================
 # §2  圖示與字元（需要 Nerd Font；不喜歡可以直接換成空字串或別的字）
 # =============================================================================
@@ -94,6 +110,7 @@ I_COST=""               # 花費
 I_5H=""                 # 5 小時額度
 I_WEEK=""               # 每週額度
 I_FABLE=""                # Fable（fae-crown U+E26E）
+# subagent 面板的模型／執行時間圖示直接沿用上面的 I_MODEL / I_CLOCK，不用另外設定
 
 BAR_FULL="▰"             # 進度條已填滿
 BAR_EMPTY="▱"            # 進度條未填滿
@@ -163,7 +180,7 @@ seg() {  # seg <bg> <fg> <text> [merge:0|1]
   SEG_N=$((SEG_N + 1))
 }
 
-flush() {
+flush() {  # flush [capture] — capture 時把結果存到 ROWOUT，不印出（--subagent 用）
   # 整行黏成一條連續膠囊：行首／行尾各一個圓弧，
   # 段與段之間用箭頭；同一組（merge=1）之間用細線。
   [ "$SEG_N" -eq 0 ] && { SEGS=""; return; }
@@ -187,7 +204,7 @@ flush() {
 $SEGS
 EOF
   put $'\033[0m'; put_fg "$prev_bg"; put "$PILL_CAP_R"; put $'\033[0m'
-  printf '%s\n' "$OUT"
+  if [ "${1:-}" = "capture" ]; then ROWOUT="$OUT"; else printf '%s\n' "$OUT"; fi
   SEGS=""; SEG_N=0
 }
 
@@ -273,6 +290,148 @@ style() {  # style <fg> <bg> -> STYLEOUT（把顏色狀態接回段落底色，�
   put_bg "$2"; put_fg "$1"
   STYLEOUT="$OUT"; OUT="$save"
 }
+
+# ── Subagent 面板 ──────────────────────────────────────────────
+# Claude Code 的 subagentStatusLine 是另一支獨立的呼叫協定：
+#   stdin  -> {"transcript_path":..., "tasks":[{id,name,label,description,
+#              type,status,startTime,model,contextWindowSize,tokenCount}, ...]}
+#   stdout -> 每個任務一行 {"id":"...","content":"<ansi 內容>"}
+# 跟主列的 JSON 完全不同格，所以獨立成自己的一段，不動主列的解析邏輯。
+
+model_short() {  # claude-opus-4-5-20250929 -> Opus 4.5；認不得的原樣傳回 -> MODELOUT
+  local s=$1 fam ver
+  MODELOUT="$s"
+  case "$s" in claude-*) ;; *) return 0;; esac
+  s=${s#claude-}
+  case "$s" in *-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) s=${s%-*};; esac
+  fam=${s%%-*}; ver=${s#"$fam"}; ver=${ver#-}
+  case "$ver" in ''|*[!0-9-]*) return 0;; esac
+  case "$fam" in
+    fable)  fam="Fable"  ;;
+    opus)   fam="Opus"   ;;
+    sonnet) fam="Sonnet" ;;
+    haiku)  fam="Haiku"  ;;
+    *) return 0 ;;
+  esac
+  MODELOUT="$fam ${ver//-/.}"
+}
+
+sub_role() {  # 讀 agent-<id>.meta.json 的 agentType -> SUBROLE ；$1=transcript_path $2=task id
+  local tp=$1 id=$2 path
+  SUBROLE=""
+  case "$id" in ''|*[!A-Za-z0-9._:-]*) return 1;; esac
+  case "$tp" in *.jsonl) path="${tp%.jsonl}/subagents/agent-${id}.meta.json";; *) return 1;; esac
+  [ -r "$path" ] || return 1
+  SUBROLE=$(jq -r '.agentType // ""' "$path" 2>/dev/null)
+}
+
+json_escape() {  # -> JSONOUT ；跳脫反斜線／雙引號／ESC，供 --subagent 的 JSON 輸出用
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\033'/\\u001b}
+  JSONOUT="$s"
+}
+
+sub_name_seg() {  # 用 t_name/t_role/t_label/t_desc/t_type/t_status 組出任務名稱段
+  local identity="" detail="${t_label:-$t_desc}" label fgc
+  if [ -n "$t_name" ] && [ -n "$t_role" ] && [ "$t_name" != "$t_role" ]; then
+    identity="$t_name ($t_role)"
+  else
+    identity="${t_name:-$t_role}"
+  fi
+  if [ -n "$identity" ]; then
+    label="$identity"
+    if [ -n "$detail" ] && [ "$detail" != "$t_name" ] && [ "$detail" != "$t_role" ]; then
+      label="$label · $detail"
+    fi
+  else
+    label="${detail:-$t_type}"
+  fi
+  [ -n "$label" ] || return 0
+  case "$t_status" in
+    running|in_progress|active) fgc="$C_SUB_FG_RUN" ;;
+    completed|success|done)     fgc="$C_SUB_FG_OK"  ;;
+    failed|error|cancelled)     fgc="$C_SUB_FG_ERR" ;;
+    *)                          fgc="$C_SUB_FG_DIM" ;;
+  esac
+  seg "${C_SUB_NAME_BG:-$C_GIT_BG}" "$fgc" "$label"
+}
+
+sub_model_seg() {
+  [ -n "$t_model" ] || return 0
+  model_short "$t_model"
+  seg "${C_SUB_MODEL_BG:-$C_MODEL_BG}" "${C_SUB_MODEL_FG:-$C_MODEL_FG}" "$I_MODEL  $MODELOUT"
+}
+
+sub_ctx_seg() {  # sub_ctx_seg <tokenCount> <contextWindowSize>
+  local tok=$1 cws=$2 pct bgc fgc
+  case "$tok" in ''|*[!0-9]*) return 0;; esac
+  bgc="${C_SUB_CTX_BG:-$C_CTX_BG}"; fgc="${C_SUB_CTX_FG:-$C_CTX_FG}"
+  fmt_num "$tok"
+  case "$cws" in ''|*[!0-9]*|0) seg "$bgc" "$fgc" "$I_CTX $NUMOUT"; return 0;; esac
+  pct=$(( tok * 100 / cws )); [ "$pct" -gt 100 ] && pct=100
+  bar "$pct" "$BAR_W_CTX" "$bgc"
+  style "$fgc" "$bgc"
+  lvl_mark "$pct"
+  seg "$bgc" "$fgc" "$I_CTX $BAROUT$STYLEOUT ${pct}%$MARKOUT $NUMOUT"
+}
+
+sub_elapsed_seg() {
+  [ -n "$t_start" ] || return 0
+  local diff=$(( NOW - t_start ))
+  [ "$diff" -ge 0 ] || return 0
+  fmt_dur $(( diff * 1000 ))
+  seg "${C_SUB_ELAPSED_BG:-$C_CLOCK_BG}" "${C_SUB_ELAPSED_FG:-$C_CLOCK_FG}" "$I_CLOCK $DUROUT"
+}
+
+if [ "${1:-}" = "--subagent" ]; then
+  SUB_RAW=$(cat)
+  [ -z "$SUB_RAW" ] && exit 0
+  # -s 吃下整批 stdin：Claude Code 有時會把好幾份完整的 {tasks:[...]} 疊在一起送過來，
+  # 沒有換行分隔，所以只取最後一份（last）當作目前狀態，其餘視為過期快照丟棄。
+  SUB_LINES=$(printf '%s' "$SUB_RAW" | jq -rs '
+    def scrub: tostring | explode | map(select(. >= 32 and . != 127)) | implode;
+    def epoch:
+      (try (
+        if . == null then null
+        elif (type == "number") then (if . > 999999999999 then (./1000|floor) else floor end)
+        else
+          (tostring) as $s
+          | if ($s | test("^[0-9]+$")) then
+              ($s | tonumber) as $n | (if $n > 999999999999 then ($n/1000|floor) else $n end)
+            else
+              ($s | sub("\\.[0-9]+";"") | sub("\\+00:00";"Z") | fromdateiso8601)
+            end
+        end
+      ) catch null);
+    (last // {}) as $d
+    | ($d.tasks // [])[]
+    | [ ($d.transcript_path // ""), (.id // "" | scrub), (.name // "" | scrub),
+        (.label // "" | scrub), (.description // "" | scrub), (.type // "" | scrub),
+        (.status // "" | scrub), ((.startTime | epoch) // "" | tostring),
+        (.model // "" | scrub), (.contextWindowSize // "" | tostring),
+        (.tokenCount // "" | tostring)
+      ] | join("")
+  ' 2>/dev/null)
+  while IFS="$US" read -r t_tp t_id t_name t_label t_desc t_type t_status t_start t_model t_cws t_tok; do
+    [ -n "$t_id" ] || continue
+    t_role=""
+    [ "$t_type" = "local_agent" ] && sub_role "$t_tp" "$t_id" && t_role="$SUBROLE"
+    sub_name_seg
+    sub_model_seg
+    sub_ctx_seg "$t_tok" "$t_cws"
+    sub_elapsed_seg
+    [ "$SEG_N" -gt 0 ] || continue
+    flush capture
+    json_escape "$ROWOUT"; row_js="$JSONOUT"
+    json_escape "$t_id";   id_js="$JSONOUT"
+    printf '{"id":"%s","content":"%s"}\n' "$id_js" "$row_js"
+  done <<SUBTASKS
+$SUB_LINES
+SUBTASKS
+  exit 0
+fi
 
 # ── 讀 stdin ────────────────────────────────────────────────────
 if [ "${1:-}" = "--demo" ]; then

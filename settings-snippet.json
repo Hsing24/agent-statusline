@@ -1,11 +1,16 @@
 {
   "//": "通常直接執行 install.sh 即可；手動安裝時，才需要把 statusLine 複製到 ~/.claude/settings.json 的頂層物件。",
   "//2": "請把 YOUR_NAME 換成自己的使用者名稱；install.sh 會自動填好這個路徑。",
+  "//3": "subagentStatusLine 是選用的，install.sh 不會自動設定；要顯示 subagent 面板才需要手動加上這行。",
 
   "statusLine": {
     "type": "command",
     "command": "bash /Users/YOUR_NAME/.claude/statusline.sh",
     "padding": 0,
     "refreshInterval": 1
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "bash /Users/YOUR_NAME/.claude/statusline.sh --subagent"
   }
 }

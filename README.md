@@ -111,6 +111,35 @@ FABLE_SELF_REFRESH=1        # 0 可停用 Fable 額度自動更新
 
 請保留檔案中原有的其他設定，不要直接用上面的範例覆蓋整份檔案。
 
+### Subagent 面板（選用）
+
+開子代理（Task 工具）時，Claude Code 會在 `main` 分支下方另外顯示每個子代理的執行狀態，這是靠獨立的 `subagentStatusLine` 設定驅動、跟主列完全不同的協定。要開啟的話，在 `~/.claude/settings.json` 加上：
+
+```json
+{
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "bash \"/你的絕對路徑/.claude/statusline.sh\" --subagent"
+  }
+}
+```
+
+每個子代理會顯示一顆膠囊，由四段組成：任務名稱／模型／context 用量／執行時間。圖示沿用主列既有的 `I_MODEL`、`I_CLOCK`，不用另外設定。
+
+顏色變數都在 `statusline.sh` 的 §1，以 `C_SUB_` 開頭：
+
+| 段 | 變數 | 預設 |
+|---|---|---|
+| 任務名稱 底色 | `C_SUB_NAME_BG` | 留空 = 跟 `C_GIT_BG` 同色 |
+| 任務名稱 文字（依狀態） | `C_SUB_FG_RUN` / `C_SUB_FG_OK` / `C_SUB_FG_ERR` / `C_SUB_FG_DIM` | 執行中／完成／失敗／未知各一組 |
+| 模型 底色／文字 | `C_SUB_MODEL_BG` / `C_SUB_MODEL_FG` | `#FF7F50` 珊瑚橘 / `#0A1A2F` |
+| context 進度條 底色／文字 | `C_SUB_CTX_BG` / `C_SUB_CTX_FG` | `#FFD166`（跟第三行 `W` 額度同色）/ `#0A1A2F` |
+| 執行時間 底色／文字 | `C_SUB_ELAPSED_BG` / `C_SUB_ELAPSED_FG` | `#06D6A0` 青綠 / `#0A1A2F` |
+
+`_BG` 留空時會自動套用主列對應區塊的顏色（例如把 `C_SUB_MODEL_BG` 清空就跟第一行的 `C_MODEL_BG` 同色），改主列顏色時兩邊會一起變。
+
+沒有 `contextWindowSize` 或 `model` 等欄位時，對應的段會自動隱藏，不影響其他段顯示。
+
 ## 預覽與檢查
 
 不必開啟 Claude Code，也可以直接預覽：
@@ -124,6 +153,14 @@ bash ~/.claude/statusline.sh --demo
 ```bash
 echo '{"cwd":"'$PWD'","model":{"display_name":"Opus"},"context_window":{"used_percentage":62}}' |
   bash ~/.claude/statusline.sh
+```
+
+Subagent 面板也可以用假資料測試（`--subagent` 輸出的是一行一個 `{"id":...,"content":...}` 的 JSON，`content` 是 ANSI 內容）：
+
+```bash
+echo '{"tasks":[{"id":"t1","name":"code-review","type":"local_agent","status":"running",
+  "model":"claude-opus-4-5-20250929","contextWindowSize":1000000,"tokenCount":86400}]}' |
+  bash ~/.claude/statusline.sh --subagent | jq -r '.content'
 ```
 
 ## 疑難排解
