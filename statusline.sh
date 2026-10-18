@@ -22,6 +22,12 @@ BLUE_LIGHT="\033[38;2;144;202;249m"  # #90CAF9 (Labels & Icons)
 BLUE_MUTED="\033[38;2;100;155;200m"  # (Reset time)
 BLUE_SEP="\033[38;2;50;110;170m"     # (Divider)
 
+# ── Argon Purple Tone Palette (All text, icons, labels, reset times) ──
+ARGON_MAIN="\033[38;2;186;104;200m"   # #BA68C8 (Header)
+ARGON_LIGHT="\033[38;2;206;147;216m" # #CE93D8 (Labels & Icons)
+ARGON_MUTED="\033[38;2;160;120;180m" # (Reset time)
+ARGON_SEP="\033[38;2;120;70;140m"    # (Divider)
+
 # ── Others Orange Tone Palette (All text, icons, labels, reset times) ──
 ORANGE_MAIN="\033[38;2;255;152;0m"    # #FF9800 (Header)
 ORANGE_LIGHT="\033[38;2;255;183;77m"  # #FFB74D (Labels & Icons)
@@ -167,6 +173,10 @@ render_quota_item() {
   read -r G5_SEC
   read -r GW_PCT
   read -r GW_SEC
+  read -r A5_PCT
+  read -r A5_SEC
+  read -r AW_PCT
+  read -r AW_SEC
   read -r O5_PCT
   read -r O5_SEC
   read -r OW_PCT
@@ -183,6 +193,14 @@ render_quota_item() {
     def gw: (.quota["gemini-weekly"] // .quota["gemini-7d"] // (if ((.model.id // "") | contains("gemini")) or ((.model.display_name // "") | contains("Gemini")) then .quota_weekly else null end) // .rate_limits.seven_day // {});
     def gw_pct: (if gw.remaining_fraction != null then ((1.0 - gw.remaining_fraction) * 100 | round) elif gw.used_percentage != null then (gw.used_percentage | round) else -1 end);
     def gw_sec: parse_sec(gw);
+
+    def a5: (.quota["gemini-argon-5h"] // .quota["gemini-argon-wtu-5h"] // .quota["gemini-argon-rolling"] // .quota["argon-5h"] // {});
+    def a5_pct: (if a5.remaining_fraction != null then ((1.0 - a5.remaining_fraction) * 100 | round) elif a5.used_percentage != null then (a5.used_percentage | round) else -1 end);
+    def a5_sec: parse_sec(a5);
+
+    def aw: (.quota["gemini-argon-wtu-weekly"] // .quota["gemini-argon-weekly"] // .quota["gemini-argon-7d"] // .quota["argon-wtu-weekly"] // .quota["argon-weekly"] // .quota["argon-7d"] // (if ((.model.id // "") | test("(?i)argon")) or ((.model.display_name // "") | test("(?i)argon")) then (.quota_weekly // .quota) else null end) // {});
+    def aw_pct: (if aw.remaining_fraction != null then ((1.0 - aw.remaining_fraction) * 100 | round) elif aw.used_percentage != null then (aw.used_percentage | round) else -1 end);
+    def aw_sec: parse_sec(aw);
 
     def o5: (.quota["3p-5h"] // .quota["claude-5h"] // .quota["gpt-5h"] // .quota["3p-rolling"] // (if (((.model.id // "") | contains("gemini")) or ((.model.display_name // "") | contains("Gemini"))) | not then .quota else null end) // {});
     def o5_pct: (if o5.remaining_fraction != null then ((1.0 - o5.remaining_fraction) * 100 | round) elif o5.used_percentage != null then (o5.used_percentage | round) else -1 end);
@@ -216,11 +234,15 @@ render_quota_item() {
     g5_sec,
     gw_pct,
     gw_sec,
+    a5_pct,
+    a5_sec,
+    aw_pct,
+    aw_sec,
     o5_pct,
     o5_sec,
     ow_pct,
     ow_sec
-  ' 2>/dev/null || printf "idle\n0\n\nfalse\n\n\n0\n0\n0\n\n\n80\n\n\n\n0\n0\n0\n0\n100\n-1\n0\n-1\n0\n-1\n0\n-1\n0\n"
+  ' 2>/dev/null || printf "idle\n0\n\nfalse\n\n\n0\n0\n0\n\n\n80\n\n\n\n0\n0\n0\n0\n100\n-1\n0\n-1\n0\n-1\n0\n-1\n0\n-1\n0\n-1\n0\n"
 )"
 
 # ─── VCS & Git Diff directly from git ────────────────────────────────────────
@@ -326,11 +348,16 @@ CTX_FMT="${FG_YELLOW} ${R}${CTX_BAR_STR} ${CTX_COLOR}${B}${PCT_FMT}%${R} ${FG
 
 LINE2=" ${M_FMT}${DOT}${CTX_FMT}${DOT}${SUB_FMT}${DOT}${BG_FMT}"
 
-# ─── Row 3: Gemini Quota (5h, 7d) - Unified Blue Tone ────────────────────────
+# ─── Row 3: Gemini & Argon Quota - Unified Blue & Purple Tone ────────────────
 G5_ITEM=$(render_quota_item "5h" "" "$G5_PCT" "$G5_SEC" 8 "$BLUE_LIGHT" "$BLUE_MUTED")
 GW_ITEM=$(render_quota_item "7d" "" "$GW_PCT" "$GW_SEC" 8 "$BLUE_LIGHT" "$BLUE_MUTED")
 DOT_BLUE="${BLUE_SEP} | ${R}"
 LINE3=" ${BLUE_MAIN}${B}Gemini${R}  ${G5_ITEM}${DOT_BLUE}${GW_ITEM}"
+
+if [ "$AW_PCT" -ge 0 ] 2>/dev/null; then
+  ARGON_ITEM=$(render_quota_item "Argon" "󰚩" "$AW_PCT" "$AW_SEC" 8 "$ARGON_LIGHT" "$ARGON_MUTED")
+  LINE3="${LINE3}${DOT_BLUE}${ARGON_ITEM}"
+fi
 
 # ─── Row 4: Others Quota (5h, 7d) - Unified Orange Tone ──────────────────────
 O5_ITEM=$(render_quota_item "5h" "" "$O5_PCT" "$O5_SEC" 8 "$ORANGE_LIGHT" "$ORANGE_MUTED")
