@@ -80,7 +80,7 @@ format_seconds() {
   fi
 }
 
-# ─── Block Progress Bar Helper (███▒░░░) ─────────────────────────────────────
+# ─── Block Progress Bar Helper (■■■) ─────────────────────────────────────────
 render_block_bar() {
   local used_pct=$1
   local len=${2:-12}
@@ -103,15 +103,14 @@ render_block_bar() {
   local bar=""
   for ((i = 0; i < len; i++)); do
     if [ "$i" -lt "$filled" ]; then
-      bar="${bar}${bar_color}█${R}"
+      bar="${bar}${bar_color}■${R}"
     elif [ "$i" -eq "$filled" ]; then
-      if   [ "$remainder" -ge 75 ]; then bar="${bar}${bar_color}▓${R}${track_color}"
-      elif [ "$remainder" -ge 50 ]; then bar="${bar}${bar_color}▒${R}${track_color}"
-      elif [ "$remainder" -ge 25 ]; then bar="${bar}${bar_color}░${R}${track_color}"
-      else                               bar="${bar}${track_color}░${R}"
+      if   [ "$remainder" -ge 75 ]; then bar="${bar}${bar_color}■${R}"
+      elif [ "$remainder" -ge 25 ]; then bar="${bar}${D}${bar_color}■${R}"
+      else                               bar="${bar}${track_color}■${R}"
       fi
     else
-      bar="${bar}${track_color}░${R}"
+      bar="${bar}${track_color}■${R}"
     fi
   done
 
