@@ -11,9 +11,9 @@ Google Antigravity CLI (`agy`) 的自訂狀態列（Statusline）與終端標題
 
 ```text
 ╭─  READY |  my-project |  main* | +2 ~1 |  3
-├─ 󰚩  Gemini 3.8 Flash |  █████░░░░░░░░░░ 35.0% (350.0k/1.0M) |  0 |  1
-├─ Gemini   5h ███░░░░░ 30% 2h15m |  7d █░░░░░░░ 12% 4d10h | 󰚩 Argon █░░░░░░░ 16% 6d3h
-╰─ Others   5h ░░░░░░░░ 0% |  7d ░░░░░░░░ 0%
+├─ 󰚩  Gemini 3.8 Flash |  ■■■■■□□□□□□□□□□ 35.0% (350.0k/1.0M) |  0 |  1
+├─ Gemini   5h ■■■□□□□□ 30% 2h15m |  7d ■□□□□□□□ 12% 4d10h | 󰚩 Argon ■□□□□□□□ 16% 6d3h
+╰─ Others   5h □□□□□□□□ 0% |  7d □□□□□□□□ 0%
 ```
 
 ### 功能特色
